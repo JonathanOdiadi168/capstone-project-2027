@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>GRID/HEAT — Con Edison Resilience Console</title>
+<link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --ink:#0a0f1a;
+    --panel:#101827;
+    --panel-2:#151f33;
+    --panel-3:#1a2740;
+    --line:#233150;
+    --line-soft:#1a2740;
+    --text:#e8edf7;
+    --text-dim:#8fa0bf;
+    --text-faint:#5c6d8c;
+    --accent:#4c8dff;
+    --accent-soft:rgba(76,141,255,.15);
+    --low:#2dd4bf;
+    --mod:#f2c14e;
+    --high:#f97a4d;
+    --crit:#ef4460;
+    --font-display:'Space Grotesk',sans-serif;
+    --font-body:'IBM Plex Sans',sans-serif;
+    --font-mono:'IBM Plex Mono',monospace;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(ellipse 900px 500px at 15% -10%, rgba(76,141,255,.10), transparent 60%),
+      radial-gradient(ellipse 700px 500px at 100% 0%, rgba(239,68,96,.07), transparent 55%),
+      var(--ink);
+    color:var(--text);
+    font-family:var(--font-body);
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+  }
+  ::selection{background:var(--accent-soft);color:var(--text);}
+  a{color:var(--accent);}
+  .wrap{max-width:1400px;margin:0 auto;padding:0 20px 60px;}
+
+  /* ---------- background blueprint grid ---------- */
+  .blueprint-bg{
+    position:fixed;inset:0;z-index:-1;
+    background-image:
+      linear-gradient(var(--line-soft) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line-soft) 1px, transparent 1px);
+    background-size:42px 42px;
+    opacity:.35;
+    mask-image:radial-gradient(ellipse 90% 70% at 50% 0%, black 40%, transparent 100%);
+  }
+
+  /* ---------- header / status bar ---------- */
+  header.console{
+    border-bottom:1px solid var(--line);
+    background:rgba(10,15,26,.75);
+    backdrop-filter:blur(8px);
+    position:sticky;top:0;z-index:50;
+  }
+  .console-inner{
+    max-width:1400px;margin:0 auto;padding:14px 20px;
+    display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  }
+  .brand{display:flex;align-items:center;gap:10px;margin-right:auto;}
+  .brand-mark{
+    width:34px;height:34px;border-radius:8px;
+    background:linear-gradient(135deg,var(--accent),#1b3a7a);
+    display:flex;align-items:center;justify-content:center;
+    font-family:var(--font-mono);font-weight:600;font-size:13px;color:#fff;
+    box-shadow:0 0 0 1px rgba(255,255,255,.08) inset, 0 4px 14px rgba(76,141,255,.35);
+  }
+  .brand-text .title{font-family:var(--font-display);font-weight:700;font-size:16px;letter-spacing:.2px;line-height:1.1;}
+  .brand-text .subtitle{font-family:var(--font-mono);font-size:10.5px;color:var(--text-dim);letter-spacing:.5px;text-transform:uppercase;}
+  .status-pill{
+    display:flex;align-items:center;gap:7px;
+    font-family:var(--font-mono);font-size:11px;color:var(--text-dim);
+    background:var(--panel);border:1px solid var(--line);border-radius:100px;padding:6px 12px;
+  }
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--low);box-shadow:0 0 8px var(--low);}
+  .dot.offline{background:var(--text-faint);box-shadow:none;}
+  .dot.syncing{background:var(--mod);box-shadow:0 0 8px var(--mod);animation:pulse 1s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+  .clock{font-family:var(--font-mono);font-size:11px;color:var(--text-dim);}
+  button.btn{
+    font-family:var(--font-mono);font-size:11.5px;letter-spacing:.3px;text-transform:uppercase;
+    background:var(--panel-2);color:var(--text);border:1px solid var(--line);
+    padding:8px 14px;border-radius:8px;cursor:pointer;transition:.15s;display:inline-flex;align-items:center;gap:6px;
+  }
+  button.btn:hover{border-color:var(--accent);color:var(--accent);}
+  button.btn.primary{background:var(--accent);border-color:var(--accent);color:#08101f;font-weight:600;}
+  button.btn.primary:hover{filter:brightness(1.08);color:#08101f;}
+  button.btn:disabled{opacity:.4;cursor:not-allowed;}
+
+  /* ---------- view tabs ---------- */
+  .view-tabs{max-width:1400px;margin:0 auto;padding:0 20px 12px;display:flex;gap:8px;}
+  .tab-btn{
+    font-family:var(--font-mono);font-size:11.5px;letter-spacing:.3px;text-transform:uppercase;
+    background:transparent;color:var(--text-dim);border:1px solid var(--line);
+    padding:7px 14px;border-radius:100px;cursor:pointer;transition:.15s;
+  }
+  .tab-btn:hover{color:var(--text);border-color:var(--accent);}
+  .tab-btn.active{background:var(--accent-soft);color:var(--accent);border-color:var(--accent);font-weight:600;}
+
+  /* ---------- state comparison cards ---------- */
+  .state-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:8px;}
+  @media(max-width:860px){.state-cards{grid-template-columns:1fr;}}
+  .state-card{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:18px;border-top:3px solid var(--accent);
+  }
+  .state-card .sc-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;}
+  .state-card .sc-name{font-family:var(--font-display);font-size:17px;font-weight:700;}
+  .state-card .sc-op{font-family:var(--font-mono);font-size:10.5px;color:var(--text-dim);margin-top:2px;}
+  .state-card .sc-badge{font-family:var(--font-mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;padding:3px 8px;border-radius:100px;white-space:nowrap;}
+  .state-card .sc-primary{font-size:12.5px;color:var(--text-dim);line-height:1.6;margin:10px 0;padding-bottom:10px;border-bottom:1px solid var(--line-soft);}
+  .state-card .sc-primary b{color:var(--text);}
+  .state-card .sc-stats{display:flex;flex-direction:column;gap:6px;}
+  .state-card .sc-stat{display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:11px;}
+  .state-card .sc-stat span:first-child{color:var(--text-faint);}
+
+  /* ---------- architecture table ---------- */
+  .arch-row{display:grid;grid-template-columns:80px 1fr;gap:12px;padding:10px 0;border-bottom:1px solid var(--line-soft);font-size:12px;}
+  .arch-row:last-child{border-bottom:none;}
+  .arch-row .al{font-family:var(--font-mono);font-size:10.5px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.4px;padding-top:1px;}
+  .arch-row .av b{color:var(--text);}
+  .arch-row .av{color:var(--text-dim);line-height:1.55;}
+
+  /* ---------- timeline ---------- */
+  .timeline{position:relative;padding-left:26px;}
+  .timeline::before{content:'';position:absolute;left:6px;top:4px;bottom:4px;width:1px;background:var(--line);}
+  .tl-item{position:relative;padding-bottom:22px;}
+  .tl-item:last-child{padding-bottom:0;}
+  .tl-item::before{content:'';position:absolute;left:-26px;top:3px;width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px var(--panel);}
+  .tl-item .tl-date{font-family:var(--font-mono);font-size:10.5px;color:var(--accent);margin-bottom:3px;}
+  .tl-item .tl-title{font-size:13px;font-weight:600;margin-bottom:3px;}
+  .tl-item .tl-text{font-size:12px;color:var(--text-dim);line-height:1.6;max-width:640px;}
+
+  /* ---------- hero / command strip ---------- */
+  .hero{padding:34px 0 8px;}
+  .eyebrow{font-family:var(--font-mono);font-size:11px;color:var(--accent);text-transform:uppercase;letter-spacing:2px;margin-bottom:10px;}
+  h1{font-family:var(--font-display);font-size:clamp(26px,4vw,38px);line-height:1.15;margin:0 0 10px;font-weight:700;}
+  h1 span{color:var(--text-dim);font-weight:500;}
+  .hero p.lede{color:var(--text-dim);max-width:660px;font-size:14.5px;line-height:1.6;margin:0 0 26px;}
+
+  .stat-strip{
+    display:grid;grid-template-columns:repeat(4,1fr);gap:1px;
+    background:var(--line);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;
+    margin-bottom:30px;
+  }
+  .stat{background:var(--panel);padding:16px 18px;}
+  .stat .k{font-family:var(--font-mono);font-size:10.5px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px;}
+  .stat .v{font-family:var(--font-mono);font-size:26px;font-weight:600;color:var(--text);}
+  .stat .v small{font-size:13px;color:var(--text-dim);font-weight:400;}
+  .stat.crit .v{color:var(--crit);}
+  .stat .trend{font-size:11px;color:var(--text-faint);margin-top:4px;}
+
+  /* ---------- layout grid ---------- */
+  .layout{display:grid;grid-template-columns:1.55fr 1fr;gap:18px;align-items:start;}
+  @media(max-width:980px){.layout{grid-template-columns:1fr;}}
+
+  .panel{
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    overflow:hidden;
+  }
+  .panel-head{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+    padding:14px 18px;border-bottom:1px solid var(--line);background:var(--panel-2);
+  }
+  .panel-head h2{font-family:var(--font-display);font-size:14.5px;margin:0;font-weight:600;}
+  .panel-head .hint{font-family:var(--font-mono);font-size:10.5px;color:var(--text-faint);}
+  .panel-body{padding:18px;}
+
+  input.search{
+    width:100%;background:var(--ink);border:1px solid var(--line);color:var(--text);
+    font-family:var(--font-mono);font-size:12.5px;padding:9px 12px;border-radius:8px;outline:none;
+  }
+  input.search:focus{border-color:var(--accent);}
+  input.search::placeholder{color:var(--text-faint);}
+
+  /* ---------- borough schematic map ---------- */
+  .boro-map{display:grid;grid-template-columns:repeat(12,1fr);grid-template-rows:repeat(6,minmax(28px,auto));gap:10px;margin-top:16px;}
+  .boro-panel{
+    border:1px dashed var(--line);border-radius:8px;padding:10px 10px 12px;
+    background:linear-gradient(180deg, rgba(255,255,255,.015), transparent);
+  }
+  .boro-panel .boro-label{
+    font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.8px;
+    color:var(--text-dim);margin-bottom:8px;display:flex;justify-content:space-between;
+  }
+  .boro-panel .boro-label b{color:var(--text);font-weight:600;}
+  .node-grid{display:flex;flex-wrap:wrap;gap:4px;}
+  .node{
+    width:15px;height:15px;border-radius:3px;cursor:pointer;position:relative;
+    transition:transform .1s ease;
+    box-shadow:0 0 0 1px rgba(255,255,255,.06) inset;
+  }
+  .node:hover{transform:scale(1.35);z-index:5;}
+  .node.selected{outline:2px solid #fff;outline-offset:1px;transform:scale(1.35);z-index:6;}
+  .node.dim{opacity:.15;}
+
+  #boro-mh{grid-column:5/9;grid-row:1/5;}
+  #boro-bx{grid-column:6/11;grid-row:1/2;}
+  #boro-qn{grid-column:9/13;grid-row:2/6;}
+  #boro-bk{grid-column:5/10;grid-row:5/7;}
+  #boro-si{grid-column:1/5;grid-row:5/7;}
+  @media(max-width:640px){
+    .boro-map{grid-template-columns:repeat(6,1fr);grid-template-rows:auto;}
+    #boro-mh,#boro-bx,#boro-qn,#boro-bk,#boro-si{grid-column:1/7;grid-row:auto;}
+  }
+
+  .legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:14px;font-family:var(--font-mono);font-size:10.5px;color:var(--text-dim);}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .legend i{width:10px;height:10px;border-radius:2.5px;display:inline-block;}
+
+  /* ---------- detail / gauge panel ---------- */
+  .empty-state{padding:30px 6px;text-align:center;color:var(--text-faint);}
+  .empty-state svg{opacity:.5;margin-bottom:10px;}
+  .empty-state p{font-size:12.5px;line-height:1.6;margin:0;font-family:var(--font-mono);}
+
+  .detail-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:6px;}
+  .detail-head h3{font-family:var(--font-display);font-size:19px;margin:0 0 2px;}
+  .detail-head .meta{font-family:var(--font-mono);font-size:11px;color:var(--text-dim);}
+  .tier-tag{font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.6px;padding:4px 9px;border-radius:100px;white-space:nowrap;font-weight:600;}
+
+  .gauge-wrap{display:flex;justify-content:center;margin:16px 0 6px;}
+  .gauge-num{font-family:var(--font-mono);font-size:34px;font-weight:600;fill:var(--text);}
+  .gauge-lbl{font-family:var(--font-mono);font-size:9.5px;fill:var(--text-dim);letter-spacing:1px;}
+
+  .breakdown{display:flex;flex-direction:column;gap:10px;margin:14px 0 4px;}
+  .bd-row .bd-top{display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:10.5px;color:var(--text-dim);margin-bottom:4px;}
+  .bd-track{height:6px;border-radius:4px;background:var(--panel-3);overflow:hidden;}
+  .bd-fill{height:100%;border-radius:4px;}
+
+  .strategies{margin-top:18px;border-top:1px solid var(--line);padding-top:14px;}
+  .strategies h4{font-family:var(--font-display);font-size:12.5px;margin:0 0 10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.6px;}
+  .strat-item{
+    border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:6px;
+    padding:10px 12px;margin-bottom:8px;background:var(--panel-2);
+  }
+  .strat-item .st-top{display:flex;justify-content:space-between;gap:8px;margin-bottom:4px;}
+  .strat-item .st-title{font-size:12.5px;font-weight:600;color:var(--text);}
+  .strat-item .st-prio{font-family:var(--font-mono);font-size:9px;text-transform:uppercase;letter-spacing:.5px;padding:2px 7px;border-radius:100px;white-space:nowrap;}
+  .strat-item p{margin:0;font-size:11.5px;color:var(--text-dim);line-height:1.5;}
+  .strat-item.crit{border-left-color:var(--crit);}
+  .strat-item.high{border-left-color:var(--high);}
+  .strat-item.med{border-left-color:var(--mod);}
+  .strat-item.low{border-left-color:var(--low);}
+
+  /* ---------- ranked list ---------- */
+  .rank-row{
+    display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line-soft);
+    cursor:pointer;
+  }
+  .rank-row:last-child{border-bottom:none;}
+  .rank-row .rn{font-family:var(--font-mono);font-size:10.5px;color:var(--text-faint);width:16px;}
+  .rank-row .rname{flex:1;font-size:12.5px;}
+  .rank-row .rname small{display:block;color:var(--text-faint);font-family:var(--font-mono);font-size:10px;}
+  .rank-row .rbar{width:70px;height:5px;border-radius:3px;background:var(--panel-3);overflow:hidden;margin-right:8px;}
+  .rank-row .rbar i{display:block;height:100%;}
+  .rank-row .rval{font-family:var(--font-mono);font-size:12px;width:28px;text-align:right;}
+  .rank-row:hover{background:var(--panel-2);}
+
+  /* ---------- charts section ---------- */
+  .chart-grid{display:grid;grid-template-columns:1.3fr 1fr;gap:18px;margin-top:18px;}
+  @media(max-width:980px){.chart-grid{grid-template-columns:1fr;}}
+  .chart-box{height:290px;position:relative;}
+  .chart-box canvas{max-height:100%;}
+
+  /* ---------- methodology ---------- */
+  details.method{margin-top:18px;border:1px solid var(--line);border-radius:var(--radius);background:var(--panel);overflow:hidden;}
+  details.method summary{
+    padding:14px 18px;cursor:pointer;font-family:var(--font-display);font-size:13.5px;font-weight:600;
+    background:var(--panel-2);list-style:none;display:flex;justify-content:space-between;align-items:center;
+  }
+  details.method summary::-webkit-details-marker{display:none;}
+  details.method summary::after{content:'+';font-family:var(--font-mono);font-size:16px;color:var(--text-dim);}
+  details.method[open] summary::after{content:'–';}
+  .method-body{padding:18px;font-size:12.5px;color:var(--text-dim);line-height:1.75;}
+  .method-body h5{color:var(--text);font-family:var(--font-body);font-size:12.5px;margin:14px 0 4px;}
+  .method-body h5:first-child{margin-top:0;}
+  .method-body code{font-family:var(--font-mono);background:var(--panel-3);padding:1px 5px;border-radius:4px;font-size:11.5px;color:var(--accent);}
+  .src-list{list-style:none;padding:0;margin:6px 0 0;}
+  .src-list li{padding:4px 0;border-bottom:1px solid var(--line-soft);}
+  .src-list li:last-child{border-bottom:none;}
+
+  footer{margin-top:34px;padding-top:18px;border-top:1px solid var(--line);
+    font-family:var(--font-mono);font-size:10.5px;color:var(--text-faint);
+    display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+
+  .toast{
+    position:fixed;bottom:18px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:var(--panel-2);border:1px solid var(--line);color:var(--text);
+    font-family:var(--font-mono);font-size:12px;padding:10px 18px;border-radius:8px;
+    opacity:0;transition:.25s;pointer-events:none;z-index:100;box-shadow:0 10px 30px rgba(0,0,0,.4);
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+</style>
+</head>
+<body>
+<div class="blueprint-bg"></div>
+
+<header class="console">
+  <div class="console-inner">
+    <div class="brand">
+      <div class="brand-mark">CE</div>
+      <div class="brand-text">
+        <div class="title">GRID / HEAT</div>
+        <div class="subtitle">Resilience Console · NYC</div>
+      </div>
+    </div>
+    <div class="status-pill"><span class="dot" id="net-dot"></span><span id="net-label">checking…</span></div>
+    <div class="status-pill"><span id="sync-label">not synced</span></div>
+    <div class="clock" id="clock">—</div>
+    <button class="btn primary" id="sync-btn">↻ Sync public data</button>
+  </div>
+  <div class="view-tabs">
+    <button class="tab-btn active" id="tab-nyc" data-view="nyc">NYC ZIP View</button>
+    <button class="tab-btn" id="tab-states" data-view="states">State Comparison</button>
+  </div>
+</header>
+
+<div class="wrap">
+
+<div id="view-nyc">
+
+  <section class="hero">
+    <div class="eyebrow">Data-driven infrastructure strategy</div>
+    <h1>Energy Infrastructure Vulnerability <span>— NYC extreme heat</span></h1>
+    <p class="lede">A working model that combines NYC's published Heat Vulnerability Index with the known structural characteristics of Con Edison's network vs. radial grid to rank where heat-driven load stress is most likely to threaten reliability — and what to do about it, ZIP by ZIP.</p>
+
+    <div class="stat-strip">
+      <div class="stat"><div class="k">ZIP areas modeled</div><div class="v" id="s-total">—</div><div class="trend">2020 ZCTA boundaries</div></div>
+      <div class="stat crit"><div class="k">Critical-tier zones</div><div class="v" id="s-crit">—</div><div class="trend">Grid Stress Index ≥ 75</div></div>
+      <div class="stat"><div class="k">Citywide avg. GSI</div><div class="v" id="s-avg">—</div><div class="trend" id="s-avg-boro">—</div></div>
+      <div class="stat"><div class="k">Highest-risk borough</div><div class="v" id="s-boro">—</div><div class="trend" id="s-boro-sub">—</div></div>
+    </div>
+  </section>
+
+  <div class="layout">
+    <!-- LEFT: schematic grid map -->
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Grid Stress Schematic</h2>
+        <span class="hint">click a node · sized by borough</span>
+      </div>
+      <div class="panel-body">
+        <input class="search" id="search" placeholder="Search ZIP or neighborhood… e.g. Astoria, 10457">
+        <div class="boro-map">
+          <div class="boro-panel" id="boro-mh"><div class="boro-label"><b>Manhattan</b><span id="cnt-mh">—</span></div><div class="node-grid" id="grid-mh"></div></div>
+          <div class="boro-panel" id="boro-bx"><div class="boro-label"><b>Bronx</b><span id="cnt-bx">—</span></div><div class="node-grid" id="grid-bx"></div></div>
+          <div class="boro-panel" id="boro-qn"><div class="boro-label"><b>Queens</b><span id="cnt-qn">—</span></div><div class="node-grid" id="grid-qn"></div></div>
+          <div class="boro-panel" id="boro-bk"><div class="boro-label"><b>Brooklyn</b><span id="cnt-bk">—</span></div><div class="node-grid" id="grid-bk"></div></div>
+          <div class="boro-panel" id="boro-si"><div class="boro-label"><b>Staten Island</b><span id="cnt-si">—</span></div><div class="node-grid" id="grid-si"></div></div>
+        </div>
+        <div class="legend">
+          <span><i style="background:var(--low)"></i>Low (&lt;35)</span>
+          <span><i style="background:var(--mod)"></i>Moderate (35–54)</span>
+          <span><i style="background:var(--high)"></i>High (55–74)</span>
+          <span><i style="background:var(--crit)"></i>Critical (≥75)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: detail + strategies -->
+    <div class="panel">
+      <div class="panel-head">
+        <h2 id="detail-title">Node Detail</h2>
+        <span class="hint">tap a ZIP to inspect</span>
+      </div>
+      <div class="panel-body" id="detail-body">
+        <div class="empty-state">
+          <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+          <p>Select a ZIP node on the schematic — or a row from the ranked list below — to view its Grid Stress breakdown and recommended interventions.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ranked list + charts -->
+  <div class="layout" style="margin-top:18px;">
+    <div class="panel">
+      <div class="panel-head"><h2>Top 12 · Highest Grid Stress</h2><span class="hint">ranked citywide</span></div>
+      <div class="panel-body" id="rank-list"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>Heat Risk vs. Grid Stress</h2><span class="hint">outliers = infrastructure-driven</span></div>
+      <div class="panel-body"><div class="chart-box"><canvas id="chart-scatter"></canvas></div></div>
+    </div>
+  </div>
+
+  <div class="chart-grid">
+    <div class="panel">
+      <div class="panel-head"><h2>Top 15 Zones by Grid Stress Index</h2><span class="hint">HVI + grid-architecture weighting</span></div>
+      <div class="panel-body"><div class="chart-box"><canvas id="chart-bar"></canvas></div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>Borough Profile</h2><span class="hint">avg. components</span></div>
+      <div class="panel-body"><div class="chart-box"><canvas id="chart-boro"></canvas></div></div>
+    </div>
+  </div>
+
+  <details class="method">
+    <summary>Methodology &amp; data sources</summary>
+    <div class="method-body">
+      <h5>What the Grid Stress Index (GSI) is</h5>
+      <p>GSI is a modeled 0–100 composite built for strategic prioritization — it is <em>not</em> an official Con Edison operational metric. Con Edison does not publish exact substation or feeder-level locations or loading (reasonably, for security reasons), so this tool blends a real public health dataset with publicly documented, borough-level characteristics of Con Edison's grid architecture:</p>
+      <p><code>GSI = 0.5 × Heat Risk + 0.3 × Outage Exposure + 0.2 × (100 − Redundancy)</code></p>
+      <h5>Heat Risk</h5>
+      <p>Taken directly from the NYC Department of Health &amp; Mental Hygiene's Heat Vulnerability Index (1–5 scale per ZCTA), which summarizes surface temperature, green space, home A/C access, and socio-economic risk factors, rescaled to 0–100.</p>
+      <h5>Outage Exposure &amp; Redundancy</h5>
+      <p>Illustrative borough-level estimates derived from Con Edison's public descriptions of its two grid types: dense, mostly-underground <em>network</em> grids (high redundancy — a feeder can be pulled for maintenance with no customer impact) concentrated in Manhattan and inner Brooklyn/Bronx, versus <em>radial "auto-loop"</em> grids (single/paired feeders, more overhead cable, more storm- and heat-fault exposure) more common in Staten Island and outer Queens. These are directional estimates, not per-feeder measurements.</p>
+      <h5>Recommended strategies</h5>
+      <p>Each node's recommendations are generated by rules that mirror interventions Con Edison has publicly reported pursuing: AMI/machine-learning "replace-before-failure" feeder maintenance, submersible fault interrupters, conservation voltage optimization, feeder undergrounding, and demand-response/peak-shaving — matched to whichever combination of heat risk, outage exposure, and redundancy a zone actually has.</p>
+      <h5>Sources</h5>
+      <ul class="src-list">
+        <li>NYC DOHMH — Heat Vulnerability Index Rankings (NYC Open Data, dataset 4mhf-duep)</li>
+        <li>Con Edison — Electric Grids 101 / Electric System Overview (public filings)</li>
+        <li>Con Edison — 2024 Sustainability Report, Electric section</li>
+      </ul>
+    </div>
+  </details>
+
+</div><!-- /view-nyc -->
+
+<div id="view-states" style="display:none;">
+
+  <section class="hero">
+    <div class="eyebrow">Data-driven infrastructure strategy</div>
+    <h1>Extreme-Weather Grid Vulnerability <span>— TX · CA · NY</span></h1>
+    <p class="lede">Texas, California, and New York face three structurally different threats to grid reliability — isolation during winter cold, wildfire ignition risk, and dense-urban heat load — shaped as much by grid architecture and interconnection as by weather itself.</p>
+  </section>
+
+  <div class="state-cards">
+    <div class="state-card" id="card-TX"></div>
+    <div class="state-card" id="card-CA"></div>
+    <div class="state-card" id="card-NY"></div>
+  </div>
+
+  <div class="chart-grid" style="margin-top:18px;">
+    <div class="panel">
+      <div class="panel-head"><h2>Hazard Exposure Profile</h2><span class="hint">illustrative, 0–100 per hazard</span></div>
+      <div class="panel-body"><div class="chart-box" style="height:340px;"><canvas id="chart-radar"></canvas></div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>Grid Architecture</h2><span class="hint">interconnection &amp; redundancy</span></div>
+      <div class="panel-body" id="arch-table"></div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top:18px;">
+    <div class="panel-head"><h2>Major Grid-Stress Events, Timeline</h2><span class="hint">real, documented events</span></div>
+    <div class="panel-body"><div class="timeline" id="timeline"></div></div>
+  </div>
+
+  <details class="method" style="margin-top:18px;">
+    <summary>Methodology &amp; data sources — state comparison</summary>
+    <div class="method-body">
+      <h5>What the Hazard Exposure Index is</h5>
+      <p>A 0–100 illustrative score per hazard axis, built from each grid's publicly documented structural characteristics and event history — not a formal risk model from ERCOT, CAISO, or NYISO. It's meant to make the differences in <em>kind</em> of vulnerability visible, not to rank states by overall risk.</p>
+      <h5>Why interconnection matters so much</h5>
+      <p>Texas's ERCOT is the only grid in the continental U.S. not substantially tied to the Eastern or Western Interconnection, so it cannot import power from neighboring states in an emergency — a major reason Winter Storm Uri's 2021 rolling blackouts happened at all. California's CAISO and New York's NYISO both sit inside interconnected grids, which adds import capacity during local shortfalls but also carries cascading-failure risk, as in the August 2003 Northeast blackout.</p>
+      <h5>Sources</h5>
+      <ul class="src-list">
+        <li>FERC — Final Report on the February 2021 Cold Weather Event (ERCOT rolling blackouts, largest manual load-shed in U.S. history)</li>
+        <li>Texas Comptroller — Winter Storm Uri overview; UT Austin Energy Institute — ERCOT Blackout 2021 report</li>
+        <li>CPUC / CAISO — Public Safety Power Shutoff program fact sheets; PG&amp;E SEC filings (Oct. 2019 PSPS event)</li>
+        <li>Con Edison — public reporting on Hurricane Sandy substation flooding, 2012</li>
+      </ul>
+    </div>
+  </details>
+
+</div><!-- /view-states -->
+
+  <footer>
+    <span id="foot-sync">Data not yet synced this session.</span>
+    <span>Works offline after first sync · cached in IndexedDB on this device</span>
+  </footer>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+"use strict";
+
+/* ============================================================
+   1. SEED DATA — NYC Heat Vulnerability Index by ZCTA (2020)
+   Source: NYC DOHMH, published via NYC Open Data (4mhf-duep).
+   Used as the offline-first bundled fallback; live sync below
+   attempts to refresh this from the public endpoint.
+   ============================================================ */
+const SEED_HVI = [["10465",1],["10310",3],["11203",5],["11224",5],["11212",5],["11208",4],["10304",3],["10009",2],["10458",5],["10454",5],["10472",4],["10457",5],["10473",4],["10035",5],["11207",5],["10002",3],["11231",2],["11206",4],["10455",5],["10453",5],["11223",4],["10036",2],["10007",1],["11101",4],["11201",2],["10452",5],["10460",5],["11106",3],["11102",3],["10451",5],["11236",5],["11249",3],["10034",1],["11235",3],["10038",2],["10302",4],["11239",3],["11355",4],["10474",5],["11233",5],["10040",2],["10469",5],["10305",2],["10029",4],["11205",4],["10456",5],["10039",5],["10027",4],["10459",5],["11221",4],["10468",4],["11377",3],["10463",1],["11234",2],["10013",2],["11692",5],["11219",4],["11211",3],["10466",5],["11367",2],["11354",4],["11433",5],["11368",4],["11691",5],["10470",3],["10026",5],["10467",4],["11230",4],["11229",3],["10031",4],["11693",4],["11220",3],["11213",5],["10025",2],["10037",5],["11204",4],["10030",5],["11217",2],["11214",4],["10032",3],["11358",3],["11218",3],["10314",1],["11222",3],["11226",5],["10475",4],["10303",3],["10301",2],["10461",4],["11434",5],["11432",3],["10023",1],["11232",4],["10462",5],["11372",3],["11373",3],["11428",4],["11209",2],["11356",3],["11225",5],["11237",4],["11210",5],["11216",4],["11369",4],["11423",4],["11370",3],["10033",2],["11435",4],["11417",3],["11375",2],["11228",3],["11418",3],["10306",1],["11694",4],["10011",1],["11379",1],["11374",3],["11412",5],["11378",3],["11385",1],["11416",4],["11414",2],["11360",2],["11427",3],["11238",2],["11104",3],["11419",4],["11365",2],["10075",2],["11361",2],["11420",4],["10001",2],["11357",2],["11366",1],["11436",5],["10003",2],["11105",3],["11421",2],["11429",5],["11415",2],["11103",3],["11362",1],["11411",5],["10312",1],["11005",1],["10044",1],["11413",4],["10471",1],["10152",2],["10022",1],["10018",2],["10012",2],["11439",3],["11426",3],["10019",2],["10065",1],["11422",4],["10016",2],["11363",1],["10308",2],["10309",1],["10021",2],["10128",1],["11004",3],["11001",3],["11215",1],["10464",1],["10010",1],["10307",1],["10024",1],["10028",1],["10014",1],["11697",2],["10069",1],["10103",1],["10017",2],["10278",1],["10004",1],["10006",1],["10280",1],["10005",1],["11109",1],["10282",1]];
+
+const NAMES = {"10465":"Throggs Neck","10310":"West Brighton","11203":"East Flatbush","11224":"Coney Island","11212":"Brownsville","11208":"East New York","10304":"Stapleton","10009":"East Village","10458":"Fordham","10454":"Mott Haven","10472":"Soundview","10457":"Tremont","10473":"Castle Hill","10035":"East Harlem","11207":"Cypress Hills","10002":"Lower East Side","11231":"Carroll Gardens","11206":"East Williamsburg","10455":"Melrose","10453":"Morris Heights","11223":"Gravesend","10036":"Midtown West","10007":"Tribeca","11101":"Long Island City","11201":"Brooklyn Heights","10452":"Highbridge","10460":"West Farms","11106":"Astoria","11102":"Astoria","10451":"Concourse","11236":"Canarsie","11249":"Williamsburg","10034":"Inwood","11235":"Sheepshead Bay","10038":"Financial District","10302":"Port Richmond","11239":"Starrett City","11355":"Flushing","10474":"Hunts Point","11233":"Bedford-Stuyvesant","10040":"Washington Heights","10469":"Baychester","10305":"Rosebank","10029":"East Harlem","11205":"Clinton Hill","10456":"Morrisania","10039":"Harlem","10027":"Morningside Heights","10459":"Longwood","11221":"Bushwick","10468":"Bedford Park","11377":"Woodside","10463":"Kingsbridge","11234":"Flatlands","10013":"Tribeca","11692":"Arverne","11219":"Borough Park","11211":"Williamsburg","10466":"Wakefield","11367":"Fresh Meadows","11354":"Flushing","11433":"Jamaica","11368":"Corona","11691":"Far Rockaway","10470":"Woodlawn","10026":"Central Harlem","10467":"Norwood","11230":"Midwood","11229":"Sheepshead Bay","10031":"Hamilton Heights","11693":"Broad Channel","11220":"Sunset Park","11213":"Crown Heights","10025":"Upper West Side","10037":"Central Harlem","11204":"Bensonhurst","10030":"Central Harlem","11217":"Park Slope","11214":"Bensonhurst","10032":"Washington Heights","11358":"Auburndale","11218":"Kensington","10314":"Bulls Head","11222":"Greenpoint","11226":"Flatbush","10475":"Co-op City","10303":"Mariners Harbor","10301":"St. George","10461":"Pelham Bay","11434":"Jamaica","11432":"Jamaica","10023":"Lincoln Square","11232":"Sunset Park","10462":"Parkchester","11372":"Jackson Heights","11373":"Elmhurst","11428":"Queens Village","11209":"Bay Ridge","11356":"College Point","11225":"Prospect Lefferts Gardens","11237":"Bushwick","11210":"Flatlands","11216":"Bedford-Stuyvesant","11369":"East Elmhurst","11423":"Jamaica Estates","11370":"East Elmhurst","10033":"Washington Heights","11435":"Jamaica","11417":"Ozone Park","11375":"Forest Hills","11228":"Bath Beach","11418":"Richmond Hill","10306":"Great Kills","11694":"Rockaway Park","10011":"Chelsea","11379":"Middle Village","11374":"Rego Park","11412":"St. Albans","11378":"Maspeth","11385":"Ridgewood","11416":"Ozone Park","11414":"Howard Beach","11360":"Bayside","11427":"Queens Village","11238":"Prospect Heights","11104":"Sunnyside","11419":"South Richmond Hill","11365":"Fresh Meadows","10075":"Upper East Side","11361":"Bayside","11420":"South Ozone Park","10001":"Chelsea","11357":"Whitestone","11366":"Fresh Meadows","11436":"Jamaica","10003":"East Village","11105":"Astoria","11421":"Woodhaven","11429":"Queens Village","11415":"Kew Gardens","11103":"Astoria","11362":"Little Neck","11411":"Cambria Heights","10312":"Annadale","11005":"Floral Park","10044":"Roosevelt Island","11413":"Springfield Gardens","10471":"Riverdale","10152":"Midtown East","10022":"Midtown East","10018":"Garment District","10012":"SoHo","11439":"Jamaica","11426":"Bellerose","10019":"Midtown West","10065":"Upper East Side","11422":"Rosedale","10016":"Murray Hill","11363":"Little Neck","10308":"Great Kills","10309":"Prince's Bay","10021":"Upper East Side","10128":"Upper East Side","11004":"Glen Oaks","11001":"Floral Park","11215":"Park Slope","10464":"City Island","10010":"Gramercy","10307":"Tottenville","10024":"Upper West Side","10028":"Upper East Side","10014":"West Village","11697":"Breezy Point","10069":"Lincoln Square","10103":"Midtown","10017":"Midtown East","10278":"Financial District","10004":"Financial District","10006":"Financial District","10280":"Battery Park City","10005":"Financial District","11109":"Long Island City","10282":"Battery Park City"};
+
+/* Borough-level grid-architecture profile — illustrative, see Methodology panel */
+const BORO_PROFILE = {
+  "Manhattan":     {redundancy:90, outageExposure:20, grid:"Network — underground, high redundancy"},
+  "Brooklyn":      {redundancy:72, outageExposure:33, grid:"Mostly network, underground"},
+  "Bronx":         {redundancy:58, outageExposure:46, grid:"Mixed network / radial"},
+  "Queens":        {redundancy:44, outageExposure:60, grid:"Mixed, radial in outer areas"},
+  "Staten Island": {redundancy:28, outageExposure:76, grid:"Radial \u201cauto-loop\u201d, mostly overhead"}
+};
+const BORO_KEYS = {"Manhattan":"mh","Bronx":"bx","Queens":"qn","Brooklyn":"bk","Staten Island":"si"};
+const BORO_COLOR = {"Manhattan":"#4c8dff","Bronx":"#9b6bff","Queens":"#33c2c9","Brooklyn":"#f2a94e","Staten Island":"#f97a4d"};
+
+function boroughForZip(z){
+  const n = parseInt(z,10);
+  if(n>=10301 && n<=10314) return "Staten Island";
+  if(n>=10451 && n<=10475) return "Bronx";
+  if(n>=10001 && n<=10282) return "Manhattan";
+  if(n>=11201 && n<=11256) return "Brooklyn";
+  if(n>=11001 && n<=11109) return "Queens";
+  if(n>=11351 && n<=11697) return "Queens";
+  return "Manhattan";
+}
+
+/* ============================================================
+   2. STATE + DERIVED MODEL
+   ============================================================ */
+let RAW = [];      // [zip, hvi]
+let NODES = [];     // derived per-zip model objects
+let selected = null;
+let charts = {};
+
+function tierOf(gsi){
+  if(gsi>=75) return {label:"Critical", key:"crit", color:"var(--crit)"};
+  if(gsi>=55) return {label:"High", key:"high", color:"var(--high)"};
+  if(gsi>=35) return {label:"Moderate", key:"mod", color:"var(--mod)"};
+  return {label:"Low", key:"low", color:"var(--low)"};
+}
+function tierHex(key){ return {crit:"#ef4460",high:"#f97a4d",mod:"#f2c14e",low:"#2dd4bf"}[key]; }
+
+function buildModel(raw){
+  return raw.map(([zip,hvi])=>{
+    const boro = boroughForZip(zip);
+    const prof = BORO_PROFILE[boro];
+    const heatRisk = (Math.max(1,Math.min(5,hvi))-1)/4*100;
+    const gsi = Math.round(0.5*heatRisk + 0.3*prof.outageExposure + 0.2*(100-prof.redundancy));
+    return {
+      zip, hvi, boro,
+      name: NAMES[zip] || ("ZIP "+zip),
+      heatRisk: Math.round(heatRisk),
+      outageExposure: prof.outageExposure,
+      redundancy: prof.redundancy,
+      gridType: prof.grid,
+      gsi,
+      tier: tierOf(gsi)
+    };
+  });
+}
+
+function strategiesFor(n){
+  const list = [];
+  if(n.heatRisk>=75){
+    list.push({p:"crit",title:"Expand cooling infrastructure & resilience hubs",
+      text:"HVI ranks this among the city's most heat-vulnerable areas. Prioritize cooling-center capacity, spray showers, and outreach ahead of summer peaks."});
+  }
+  if(n.outageExposure>=60){
+    list.push({p:"high",title:"Harden feeders — undergrounding & auto-loop backup",
+      text:"Grid architecture here leans radial/overhead, which concentrates outage risk on fewer feeders during heat-driven peak load. Undergrounding and added backup ties reduce single-point failures."});
+  }
+  if(n.redundancy<50 && n.heatRisk>=50){
+    list.push({p:"high",title:"Deploy submersible fault interrupters",
+      text:"Fast-isolating interrupter devices — already part of Con Edison's underground reliability program — limit how far a heat-driven fault cascades before it's contained."});
+  }
+  if(n.heatRisk>=50 && n.redundancy>=70){
+    list.push({p:"med",title:"Demand response & conservation voltage optimization",
+      text:"Dense network areas carry high absolute AC load during heat waves even with strong redundancy. Peak-shaving programs and CVO trim demand at the margin, where it matters most."});
+  }
+  if(n.gsi<35){
+    list.push({p:"low",title:"Maintain baseline monitoring",
+      text:"Currently lower relative stress. Opportunistic investment in tree canopy and green infrastructure keeps future heat risk from climbing as the climate warms."});
+  }
+  list.push({p:"med",title:"Predictive \u201creplace-before-failure\u201d maintenance",
+    text:"AMI + machine-learning-driven feeder and splice replacement — used system-wide — should stay prioritized for this zone's aging cable inventory."});
+  return list;
+}
+
+/* ============================================================
+   3. INDEXEDDB (offline-first cache; DynamoDB cloud sync is a
+      documented future extension point — see syncToCloud stub)
+   ============================================================ */
+const DB_NAME = "gridHeatDB", DB_VER = 1, STORE = "cache";
+function idbOpen(){
+  return new Promise((res,rej)=>{
+    const req = indexedDB.open(DB_NAME, DB_VER);
+    req.onupgradeneeded = ()=>{ req.result.createObjectStore(STORE, {keyPath:"key"}); };
+    req.onsuccess = ()=>res(req.result);
+    req.onerror = ()=>rej(req.error);
+  });
+}
+async function idbSet(key, value){
+  try{
+    const db = await idbOpen();
+    return new Promise((res,rej)=>{
+      const tx = db.transaction(STORE,"readwrite");
+      tx.objectStore(STORE).put({key, value, ts: Date.now()});
+      tx.oncomplete = ()=>res(true);
+      tx.onerror = ()=>rej(tx.error);
+    });
+  }catch(e){ return false; }
+}
+async function idbGet(key){
+  try{
+    const db = await idbOpen();
+    return new Promise((res,rej)=>{
+      const tx = db.transaction(STORE,"readonly");
+      const r = tx.objectStore(STORE).get(key);
+      r.onsuccess = ()=>res(r.result ? r.result.value : null);
+      r.onerror = ()=>rej(r.error);
+    });
+  }catch(e){ return null; }
+}
+// Future extension point: push snapshots to a DynamoDB-backed API once one exists.
+async function syncToCloud(payload){
+  // Not yet connected — no cloud endpoint configured for this deployment.
+  return {ok:false, reason:"cloud sync endpoint not configured"};
+}
+
+/* ============================================================
+   4. LIVE DATA SYNC (NYC Open Data — Socrata, CORS-enabled)
+   ============================================================ */
+async function fetchLiveHVI(){
+  const url = "https://data.cityofnewyork.us/resource/4mhf-duep.json?$limit=500";
+  const res = await fetch(url, {mode:"cors"});
+  if(!res.ok) throw new Error("HTTP "+res.status);
+  const json = await res.json();
+  if(!Array.isArray(json) || !json.length) throw new Error("empty response");
+  const keys = Object.keys(json[0]);
+  const zipKey = keys.find(k=>/zip|zcta/i.test(k));
+  const hviKey = keys.find(k=>/hvi|heat/i.test(k));
+  if(!zipKey || !hviKey) throw new Error("unexpected schema");
+  const out = json.map(r=>[String(r[zipKey]).trim(), parseInt(r[hviKey],10)])
+    .filter(([z,h])=> /^\d{5}$/.test(z) && h>=1 && h<=5);
+  if(out.length < 50) throw new Error("suspiciously few rows");
+  return out;
+}
+
+function setNetStatus(state){
+  const dot = document.getElementById("net-dot"), lbl = document.getElementById("net-label");
+  dot.className = "dot " + (state==="online"?"":state==="syncing"?"syncing":"offline");
+  lbl.textContent = state==="online" ? "live source" : state==="syncing" ? "syncing…" : "offline / cached";
+}
+
+async function syncData(showToast){
+  setNetStatus("syncing");
+  document.getElementById("sync-btn").disabled = true;
+  try{
+    const live = await fetchLiveHVI();
+    RAW = live;
+    await idbSet("hvi_data", live);
+    await idbSet("last_sync", Date.now());
+    setNetStatus("online");
+    if(showToast) toast("Synced live HVI data from NYC Open Data (" + live.length + " ZIPs)");
+  }catch(e){
+    const cached = await idbGet("hvi_data");
+    RAW = cached && cached.length ? cached : SEED_HVI;
+    setNetStatus(navigator.onLine ? "offline" : "offline");
+    if(showToast) toast(cached ? "Live sync failed — using last cached data" : "Offline — using bundled dataset");
+  }
+  document.getElementById("sync-btn").disabled = false;
+  const last = await idbGet("last_sync");
+  document.getElementById("sync-label").textContent = last ? ("synced " + timeAgo(last)) : "using bundled data";
+  document.getElementById("foot-sync").textContent = last
+    ? ("Last synced " + new Date(last).toLocaleString() + " · source: NYC Open Data (4mhf-duep)")
+    : "Running on bundled 2026 snapshot of NYC DOHMH Heat Vulnerability Index.";
+  rebuild();
+}
+
+function timeAgo(ts){
+  const s = Math.floor((Date.now()-ts)/1000);
+  if(s<60) return "just now";
+  if(s<3600) return Math.floor(s/60)+"m ago";
+  if(s<86400) return Math.floor(s/3600)+"h ago";
+  return Math.floor(s/86400)+"d ago";
+}
+
+function toast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toast._h);
+  toast._h = setTimeout(()=>t.classList.remove("show"), 3200);
+}
+
+/* ============================================================
+   5. RENDER
+   ============================================================ */
+function rebuild(){
+  NODES = buildModel(RAW);
+  renderStats();
+  renderMap();
+  renderRankList();
+  renderCharts();
+}
+
+function renderStats(){
+  const total = NODES.length;
+  const crit = NODES.filter(n=>n.tier.key==="crit").length;
+  const avg = Math.round(NODES.reduce((a,n)=>a+n.gsi,0)/total);
+  document.getElementById("s-total").textContent = total;
+  document.getElementById("s-crit").textContent = crit;
+  document.getElementById("s-avg").textContent = avg;
+  document.getElementById("s-avg-boro").textContent = tierOf(avg).label + " citywide tier";
+
+  const byBoro = {};
+  NODES.forEach(n=>{ (byBoro[n.boro]=byBoro[n.boro]||[]).push(n.gsi); });
+  let worst = null, worstAvg = -1;
+  Object.entries(byBoro).forEach(([b,arr])=>{
+    const a = arr.reduce((x,y)=>x+y,0)/arr.length;
+    if(a>worstAvg){ worstAvg=a; worst=b; }
+  });
+  document.getElementById("s-boro").textContent = worst;
+  document.getElementById("s-boro-sub").textContent = "avg GSI " + Math.round(worstAvg);
+}
+
+function renderMap(){
+  const search = (document.getElementById("search").value||"").trim().toLowerCase();
+  Object.entries(BORO_KEYS).forEach(([boro,key])=>{
+    const el = document.getElementById("grid-"+key);
+    el.innerHTML = "";
+    const nodes = NODES.filter(n=>n.boro===boro).sort((a,b)=>b.gsi-a.gsi);
+    document.getElementById("cnt-"+key).textContent = nodes.length + " zones";
+    nodes.forEach(n=>{
+      const d = document.createElement("div");
+      d.className = "node";
+      d.style.background = tierHex(n.tier.key);
+      d.title = n.name + " (" + n.zip + ") — GSI " + n.gsi + " — " + n.tier.label;
+      if(selected===n.zip) d.classList.add("selected");
+      if(search){
+        const hit = n.zip.includes(search) || n.name.toLowerCase().includes(search);
+        if(!hit) d.classList.add("dim");
+      }
+      d.addEventListener("click", ()=>selectNode(n.zip));
+      el.appendChild(d);
+    });
+  });
+}
+
+function renderRankList(){
+  const top = [...NODES].sort((a,b)=>b.gsi-a.gsi).slice(0,12);
+  const wrap = document.getElementById("rank-list");
+  wrap.innerHTML = "";
+  top.forEach((n,i)=>{
+    const row = document.createElement("div");
+    row.className = "rank-row";
+    row.innerHTML = `
+      <span class="rn">${i+1}</span>
+      <span class="rname">${n.name}<small>${n.zip} · ${n.boro}</small></span>
+      <span class="rbar"><i style="width:${n.gsi}%;background:${tierHex(n.tier.key)}"></i></span>
+      <span class="rval">${n.gsi}</span>`;
+    row.addEventListener("click", ()=>selectNode(n.zip));
+    wrap.appendChild(row);
+  });
+}
+
+function selectNode(zip){
+  selected = zip;
+  const n = NODES.find(x=>x.zip===zip);
+  if(!n) return;
+  renderMap();
+  const body = document.getElementById("detail-body");
+  document.getElementById("detail-title").textContent = n.name;
+
+  const strategies = strategiesFor(n);
+  const prioLabel = {crit:"Critical",high:"High",med:"Medium",low:"Low"};
+  const prioColor = {crit:"var(--crit)",high:"var(--high)",med:"var(--mod)",low:"var(--low)"};
+
+  body.innerHTML = `
+    <div class="detail-head">
+      <div>
+        <h3>${n.name}</h3>
+        <div class="meta">ZIP ${n.zip} · ${n.boro} · ${n.gridType}</div>
+      </div>
+      <span class="tier-tag" style="background:${tierHex(n.tier.key)}22;color:${tierHex(n.tier.key)};border:1px solid ${tierHex(n.tier.key)}55">${n.tier.label}</span>
+    </div>
+    <div class="gauge-wrap">${gaugeSVG(n.gsi, tierHex(n.tier.key))}</div>
+    <div class="breakdown">
+      ${bdRow("Heat vulnerability", n.heatRisk, "#f97a4d")}
+      ${bdRow("Outage exposure", n.outageExposure, "#f2c14e")}
+      ${bdRow("Redundancy (higher = safer)", n.redundancy, "#2dd4bf")}
+    </div>
+    <div class="strategies">
+      <h4>Recommended strategies</h4>
+      ${strategies.map(s=>`
+        <div class="strat-item ${s.p}">
+          <div class="st-top">
+            <span class="st-title">${s.title}</span>
+            <span class="st-prio" style="background:${prioColor[s.p]}22;color:${prioColor[s.p]}">${prioLabel[s.p]}</span>
+          </div>
+          <p>${s.text}</p>
+        </div>`).join("")}
+    </div>`;
+}
+
+function bdRow(label,val,color){
+  return `<div class="bd-row">
+    <div class="bd-top"><span>${label}</span><span>${val}</span></div>
+    <div class="bd-track"><div class="bd-fill" style="width:${val}%;background:${color}"></div></div>
+  </div>`;
+}
+
+function gaugeSVG(val,color){
+  const r=54, c=2*Math.PI*r, pct=Math.max(0,Math.min(100,val))/100;
+  return `<svg width="160" height="160" viewBox="0 0 160 160">
+    <circle cx="80" cy="80" r="${r}" fill="none" stroke="var(--panel-3)" stroke-width="10"/>
+    <circle cx="80" cy="80" r="${r}" fill="none" stroke="${color}" stroke-width="10"
+      stroke-dasharray="${c}" stroke-dashoffset="${c*(1-pct)}" stroke-linecap="round"
+      transform="rotate(-90 80 80)" style="filter:drop-shadow(0 0 6px ${color}88)"/>
+    <text x="80" y="82" text-anchor="middle" class="gauge-num">${val}</text>
+    <text x="80" y="102" text-anchor="middle" class="gauge-lbl">GRID STRESS INDEX</text>
+  </svg>`;
+}
+
+/* ============================================================
+   6. CHARTS
+   ============================================================ */
+function renderCharts(){
+  Object.values(charts).forEach(c=>c && c.destroy());
+  const fontMono = "IBM Plex Mono, monospace";
+  Chart.defaults.color = "#8fa0bf";
+  Chart.defaults.font.family = fontMono;
+  Chart.defaults.font.size = 10.5;
+
+  // Top 15 bar
+  const top15 = [...NODES].sort((a,b)=>b.gsi-a.gsi).slice(0,15).reverse();
+  charts.bar = new Chart(document.getElementById("chart-bar"), {
+    type:"bar",
+    data:{
+      labels: top15.map(n=>n.name+" ("+n.zip+")"),
+      datasets:[{data:top15.map(n=>n.gsi), backgroundColor:top15.map(n=>tierHex(n.tier.key)), borderRadius:4, barThickness:11}]
+    },
+    options:{
+      indexAxis:"y", responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}, tooltip:{callbacks:{label:c=>"GSI "+c.raw}}},
+      scales:{x:{min:0,max:100,grid:{color:"#1a2740"}}, y:{grid:{display:false}, ticks:{font:{size:9.5}}}}
+    }
+  });
+
+  // Scatter: HVI vs GSI colored by borough
+  const byBoro = {};
+  NODES.forEach(n=>{ (byBoro[n.boro]=byBoro[n.boro]||[]).push({x:n.hvi, y:n.gsi, label:n.name}); });
+  charts.scatter = new Chart(document.getElementById("chart-scatter"), {
+    type:"scatter",
+    data:{ datasets: Object.entries(byBoro).map(([b,pts])=>({
+      label:b, data:pts, backgroundColor:BORO_COLOR[b]+"cc", pointRadius:5, pointHoverRadius:7
+    }))},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{position:"bottom", labels:{boxWidth:8, font:{size:9.5}}},
+        tooltip:{callbacks:{label:c=>c.dataset.data[c.dataIndex].label+" · HVI "+c.parsed.x+" · GSI "+c.parsed.y}}},
+      scales:{
+        x:{title:{display:true,text:"Heat Vulnerability Index (1\u20135)"}, min:0, max:6, grid:{color:"#1a2740"}},
+        y:{title:{display:true,text:"Grid Stress Index"}, min:0, max:100, grid:{color:"#1a2740"}}
+      }
+    }
+  });
+
+  // Borough profile grouped bar
+  const boros = Object.keys(BORO_PROFILE);
+  const avgHeat = boros.map(b=>{ const arr=NODES.filter(n=>n.boro===b); return Math.round(arr.reduce((a,n)=>a+n.heatRisk,0)/arr.length); });
+  charts.boro = new Chart(document.getElementById("chart-boro"), {
+    type:"bar",
+    data:{
+      labels:boros,
+      datasets:[
+        {label:"Avg heat risk", data:avgHeat, backgroundColor:"#f97a4d", borderRadius:4},
+        {label:"Outage exposure", data:boros.map(b=>BORO_PROFILE[b].outageExposure), backgroundColor:"#f2c14e", borderRadius:4},
+        {label:"Redundancy", data:boros.map(b=>BORO_PROFILE[b].redundancy), backgroundColor:"#2dd4bf", borderRadius:4}
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{position:"bottom", labels:{boxWidth:8, font:{size:9.5}}}},
+      scales:{x:{grid:{display:false}, ticks:{font:{size:9.5}}}, y:{min:0,max:100,grid:{color:"#1a2740"}}}
+    }
+  });
+}
+
+/* ============================================================
+   6b. STATE COMPARISON — Texas / California / New York
+   Hazard Exposure Index values are illustrative (0–100), grounded
+   in publicly documented grid-architecture facts and event history.
+   See in-app Methodology panel for sources.
+   ============================================================ */
+const STATES = {
+  TX: {
+    name:"Texas", op:"ERCOT", color:"#f97a4d",
+    interconnect:"Isolated — not substantially tied to the Eastern or Western Interconnection",
+    primary:"<b>Winter cold isolation.</b> ERCOT can't import power from neighboring grids in an emergency, so a shortfall becomes rolling blackouts rather than an import.",
+    stats:[["Customers w/o power, Uri 2021","4.5M+"],["Peak rolling blackout size","20,000 MW"],["Winter reserve margin (2026 proj.)","10.1%"]],
+    hazards:{heat:65, cold:78, wildfire:30, storm:60, isolation:95},
+    arch:"Single-state ERCOT balancing authority; almost entirely thermal + fast-growing wind/solar/battery mix; minimal DC-tie import capacity to neighboring grids."
+  },
+  CA: {
+    name:"California", op:"CAISO", color:"#f2c14e",
+    interconnect:"Interconnected — part of the Western Interconnection",
+    primary:"<b>Wildfire ignition risk.</b> Utilities proactively de-energize lines (PSPS) during high-wind, low-humidity conditions to prevent equipment-caused fires.",
+    stats:[["Customers de-energized, Oct 2019 PSPS","738,000"],["PG&E high-fire-risk counties","27"],["PG&E lines undergrounded (to date)","1,000 mi"]],
+    hazards:{heat:70, cold:15, wildfire:90, storm:35, isolation:20},
+    arch:"Investor-owned utilities (PG&E, SCE, SDG&E) manage wildfire risk via PSPS + Enhanced Powerline Safety Settings; CAISO can draw on Western Interconnection during heat-driven shortfalls."
+  },
+  NY: {
+    name:"New York", op:"NYISO / Con Edison", color:"#4c8dff",
+    interconnect:"Interconnected — part of the Eastern Interconnection",
+    primary:"<b>Dense-urban heat load.</b> Concentrated A/C demand during heat waves stresses network feeders even where redundancy is high.",
+    stats:[["Con Ed customers affected, Sandy 2012","800K+"],["NYC ZIPs modeled (this tool)","180"],["Manhattan grid type","Network, underground"]],
+    hazards:{heat:75, cold:40, wildfire:10, storm:65, isolation:15},
+    arch:"Con Edison runs dense underground network grids in Manhattan/inner boroughs (high redundancy) alongside more radial, overhead circuits in outer areas; NYISO can import power via the Eastern Interconnection."
+  }
+};
+
+function renderStateCards(){
+  Object.entries(STATES).forEach(([key,s])=>{
+    const avgHazard = Math.round(Object.values(s.hazards).reduce((a,b)=>a+b,0)/5);
+    const t = tierOf(avgHazard);
+    document.getElementById("card-"+key).innerHTML = `
+      <div class="sc-top">
+        <div>
+          <div class="sc-name">${s.name}</div>
+          <div class="sc-op">${s.op}</div>
+        </div>
+        <span class="sc-badge" style="background:${tierHex(t.key)}22;color:${tierHex(t.key)};border:1px solid ${tierHex(t.key)}55">avg ${avgHazard}</span>
+      </div>
+      <div class="sc-primary">${s.primary}</div>
+      <div class="sc-stats">
+        ${s.stats.map(([k,v])=>`<div class="sc-stat"><span>${k}</span><span>${v}</span></div>`).join("")}
+      </div>`;
+  });
+}
+
+function renderArchTable(){
+  const rows = Object.entries(STATES).map(([key,s])=>`
+    <div class="arch-row">
+      <div class="al">${s.name}</div>
+      <div class="av"><b>${s.interconnect}.</b> ${s.arch}</div>
+    </div>`).join("");
+  document.getElementById("arch-table").innerHTML = rows;
+}
+
+function renderTimeline(){
+  const events = [
+    {date:"Oct 2019", title:"PG&E's largest early PSPS event", text:"California's PG&E de-energized lines to roughly 738,000 customers across 34 Northern/Central California counties during extreme fire-weather conditions."},
+    {date:"Oct 2012", title:"Hurricane Sandy floods NYC substations", text:"Storm surge flooded a Con Edison substation on Manhattan's East Side, knocking out power to roughly 800,000+ customers across parts of NYC."},
+    {date:"Feb 2021", title:"Winter Storm Uri", text:"ERCOT ordered 20,000 MW of rolling blackouts \u2014 the largest manually controlled load-shed event in U.S. history \u2014 as Texas's isolated grid could not import power. More than 4.5 million customers lost power, some for days."},
+    {date:"Feb 2025", title:"ERCOT solar record", text:"Texas set a new solar generation record, meeting 48% of ERCOT demand at the peak \u2014 part of a broader post-Uri build-out of solar, wind, and battery storage capacity."},
+    {date:"Jan 2026", title:"Texas grid holds through winter storm test", text:"A significant winter storm produced localized outages but no repeat of 2021's cascading failure, with officials citing five years of weatherization and capacity investment."}
+  ];
+  document.getElementById("timeline").innerHTML = events.map(e=>`
+    <div class="tl-item">
+      <div class="tl-date">${e.date}</div>
+      <div class="tl-title">${e.title}</div>
+      <div class="tl-text">${e.text}</div>
+    </div>`).join("");
+}
+
+let radarChart = null;
+function renderRadar(){
+  if(radarChart){ radarChart.destroy(); radarChart = null; }
+  const labels = ["Extreme Heat","Winter Cold","Wildfire","Storm / Flood","Grid Isolation"];
+  const order = ["heat","cold","wildfire","storm","isolation"];
+  radarChart = new Chart(document.getElementById("chart-radar"), {
+    type:"radar",
+    data:{
+      labels,
+      datasets:Object.values(STATES).map(s=>({
+        label:s.name,
+        data:order.map(k=>s.hazards[k]),
+        borderColor:s.color, backgroundColor:s.color+"22",
+        pointBackgroundColor:s.color, borderWidth:2
+      }))
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{position:"bottom", labels:{boxWidth:8, font:{size:9.5}}}},
+      scales:{r:{
+        min:0, max:100,
+        grid:{color:"#1a2740"}, angleLines:{color:"#1a2740"},
+        pointLabels:{font:{size:10.5}, color:"#8fa0bf"},
+        ticks:{display:false, backdropColor:"transparent"}
+      }}
+    }
+  });
+}
+
+let statesInitialized = false;
+function initStatesView(){
+  if(statesInitialized) return;
+  statesInitialized = true;
+  renderStateCards();
+  renderArchTable();
+  renderTimeline();
+  renderRadar();
+}
+
+function switchView(view){
+  document.getElementById("view-nyc").style.display = view==="nyc" ? "" : "none";
+  document.getElementById("view-states").style.display = view==="states" ? "" : "none";
+  document.getElementById("tab-nyc").classList.toggle("active", view==="nyc");
+  document.getElementById("tab-states").classList.toggle("active", view==="states");
+  if(view==="states") initStatesView();
+}
+document.getElementById("tab-nyc").addEventListener("click", ()=>switchView("nyc"));
+document.getElementById("tab-states").addEventListener("click", ()=>switchView("states"));
+
+/* ============================================================
+   7. INIT
+   ============================================================ */
+document.getElementById("sync-btn").addEventListener("click", ()=>syncData(true));
+document.getElementById("search").addEventListener("input", renderMap);
+window.addEventListener("online", ()=>setNetStatus("online"));
+window.addEventListener("offline", ()=>setNetStatus("offline"));
+
+function tickClock(){
+  document.getElementById("clock").textContent = new Date().toLocaleTimeString("en-US",{hour12:false});
+}
+setInterval(tickClock, 1000); tickClock();
+
+(async function init(){
+  const cached = await idbGet("hvi_data");
+  RAW = (cached && cached.length) ? cached : SEED_HVI;
+  const last = await idbGet("last_sync");
+  document.getElementById("sync-label").textContent = last ? ("synced " + timeAgo(last)) : "using bundled data";
+  setNetStatus(navigator.onLine ? "offline" : "offline");
+  rebuild();
+  // Attempt a silent background sync on first load if online.
+  if(navigator.onLine) syncData(false);
+})();
+
+})();
+</script>
+</body>
+</html>
